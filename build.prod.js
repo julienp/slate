@@ -5809,7 +5809,7 @@ var _initialiseProps = function _initialiseProps() {
   this.onBeforeInput = function (event) {
     if (_this2.props.readOnly) return;
     if (!_this2.isInContentEditable(event)) return;
-    if (event.type === 'textInput' && event.data && event.data.length > 1) return;
+    if (event.type === 'textInput' && event.data && event.data.length > 1 && _environment.IS_IOS) return;
 
     var data = {};
 
@@ -8165,6 +8165,7 @@ var IS_SAFARI = exports.IS_SAFARI = BROWSER === 'safari';
 
 var IS_MAC = exports.IS_MAC = OS === 'macos';
 var IS_WINDOWS = exports.IS_WINDOWS = OS === 'windows';
+var IS_IOS = exports.IS_IOS = OS === 'ios';
 
 }).call(this,require('_process'))
 },{"_process":1247}],44:[function(require,module,exports){
