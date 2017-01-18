@@ -9403,7 +9403,7 @@ var Node = {
    */
 
   getKeys: function getKeys() {
-    var keys = [];
+    var keys = [this.key];
 
     this.forEachDescendant(function (desc) {
       keys.push(desc.key);
@@ -10568,7 +10568,7 @@ var Node = {
   insertNode: function insertNode(index, node) {
     var keys = this.getKeys();
 
-    if (keys.contains(node.key)) {
+    while (keys.contains(node.key)) {
       node = node.regenerateKey();
     }
 
