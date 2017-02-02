@@ -5760,10 +5760,12 @@ Content.propTypes = {
   onPaste: _react2.default.PropTypes.func.isRequired,
   onSelect: _react2.default.PropTypes.func.isRequired,
   readOnly: _react2.default.PropTypes.bool.isRequired,
+  role: _react2.default.PropTypes.string,
   schema: _react2.default.PropTypes.object,
   spellCheck: _react2.default.PropTypes.bool.isRequired,
   state: _react2.default.PropTypes.object.isRequired,
-  style: _react2.default.PropTypes.object
+  style: _react2.default.PropTypes.object,
+  tabIndex: _react2.default.PropTypes.number
 };
 Content.defaultProps = {
   style: {}
@@ -6232,7 +6234,9 @@ var _initialiseProps = function _initialiseProps() {
     var props = _this2.props;
     var className = props.className,
         readOnly = props.readOnly,
-        state = props.state;
+        state = props.state,
+        tabIndex = props.tabIndex,
+        role = props.role;
     var document = state.document;
 
     var children = document.nodes.map(function (node) {
@@ -6278,7 +6282,9 @@ var _initialiseProps = function _initialiseProps() {
       onPaste: _this2.onPaste,
       onSelect: _this2.onSelect,
       spellCheck: spellCheck,
-      style: style
+      style: style,
+      role: readOnly ? null : role || 'textbox',
+      tabIndex: tabIndex
     }, children);
   };
 
@@ -6556,10 +6562,12 @@ Editor.propTypes = {
   placeholderStyle: _react2.default.PropTypes.object,
   plugins: _react2.default.PropTypes.array,
   readOnly: _react2.default.PropTypes.bool,
+  role: _react2.default.PropTypes.string,
   schema: _react2.default.PropTypes.object,
   spellCheck: _react2.default.PropTypes.bool,
   state: _react2.default.PropTypes.instanceOf(_state2.default).isRequired,
-  style: _react2.default.PropTypes.object
+  style: _react2.default.PropTypes.object,
+  tabIndex: _react2.default.PropTypes.number
 };
 Editor.defaultProps = {
   onChange: _noop2.default,
@@ -6701,7 +6709,9 @@ var _initialiseProps = function _initialiseProps() {
       className: props.className,
       readOnly: props.readOnly,
       spellCheck: props.spellCheck,
-      style: props.style
+      style: props.style,
+      tabIndex: props.tabIndex,
+      role: props.role
     }));
   };
 };
@@ -8072,7 +8082,7 @@ var BROWSER_RULES = [['edge', /Edge\/([0-9\._]+)/], ['chrome', /(?!Chrom.*OPR)Ch
  * @type {Array}
  */
 
-var OS_RULES = [['macos', /mac os x/i], ['ios', /os ([\.\_\d]+) like mac os/i], ['android', /android/i], ['firefoxos', /mozilla\/[a-z\.\_\d]+ \((?:mobile)|(?:tablet)/i], ['windows', /windows\s*(?:nt)?\s*([\.\_\d]+)/i]];
+var OS_RULES = [['ios', /os ([\.\_\d]+) like mac os/i], ['macos', /mac os x/i], ['android', /android/i], ['firefoxos', /mozilla\/[a-z\.\_\d]+ \((?:mobile)|(?:tablet)/i], ['windows', /windows\s*(?:nt)?\s*([\.\_\d]+)/i]];
 
 /**
  * Define variables to store the result.
@@ -8812,6 +8822,10 @@ var _block2 = _interopRequireDefault(_block);
 
 require('./inline');
 
+var _data = require('./data');
+
+var _data2 = _interopRequireDefault(_data);
+
 var _node = require('./node');
 
 var _node2 = _interopRequireDefault(_node);
@@ -8858,6 +8872,7 @@ function _inherits(subClass, superClass) {
  */
 
 var DEFAULTS = {
+  data: new _immutable.Map(),
   key: null,
   nodes: new _immutable.List()
 };
@@ -8941,6 +8956,7 @@ var Document = function (_ref) {
       if (properties instanceof Document) return properties;
 
       properties.key = properties.key || (0, _generateKey2.default)();
+      properties.data = _data2.default.create(properties.data);
       properties.nodes = _block2.default.createList(properties.nodes);
 
       return new Document(properties);
@@ -8966,7 +8982,7 @@ for (var method in _node2.default) {
 
 exports.default = Document;
 
-},{"../utils/generate-key":78,"./block":47,"./inline":51,"./node":53,"immutable":1218}],51:[function(require,module,exports){
+},{"../utils/generate-key":78,"./block":47,"./data":49,"./inline":51,"./node":53,"immutable":1218}],51:[function(require,module,exports){
 'use strict';
 
 var _typeof = typeof Symbol === "function" && typeof Symbol.iterator === "symbol" ? function (obj) { return typeof obj; } : function (obj) { return obj && typeof Symbol === "function" && obj.constructor === Symbol && obj !== Symbol.prototype ? "symbol" : typeof obj; };
@@ -9403,7 +9419,7 @@ var Node = {
    */
 
   getKeys: function getKeys() {
-    var keys = [this.key];
+    var keys = [];
 
     this.forEachDescendant(function (desc) {
       keys.push(desc.key);
@@ -10568,7 +10584,7 @@ var Node = {
   insertNode: function insertNode(index, node) {
     var keys = this.getKeys();
 
-    while (keys.contains(node.key)) {
+    if (keys.contains(node.key)) {
       node = node.regenerateKey();
     }
 
@@ -15997,6 +16013,7 @@ var Raw = {
   deserializeDocument: function deserializeDocument(object, options) {
     return _document2.default.create({
       key: object.key,
+      data: object.data,
       nodes: _block2.default.createList(object.nodes.map(function (node) {
         return Raw.deserializeNode(node, options);
       }))
@@ -16188,9 +16205,6 @@ var Raw = {
     if (!options.preserveKeys) {
       delete object.key;
     }
-    if (block.isVoid && !options.preserveKeys) {
-      delete object.nodes;
-    }
 
     return options.terse ? Raw.tersifyBlock(object) : object;
   },
@@ -16207,6 +16221,7 @@ var Raw = {
     var options = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {};
 
     var object = {
+      data: document.data.toJSON(),
       key: document.key,
       kind: document.kind,
       nodes: document.nodes.toArray().map(function (node) {
@@ -16404,8 +16419,8 @@ var Raw = {
     var ret = {};
     ret.kind = object.kind;
     ret.type = object.type;
-    if (object.nodes) ret.nodes = object.nodes;
     if (object.key) ret.key = object.key;
+    if (!object.isVoid) ret.nodes = object.nodes;
     if (object.isVoid) ret.isVoid = object.isVoid;
     if (!(0, _isEmpty2.default)(object.data)) ret.data = object.data;
     return ret;
@@ -16422,6 +16437,7 @@ var Raw = {
     var ret = {};
     ret.nodes = object.nodes;
     if (object.key) ret.key = object.key;
+    if (!(0, _isEmpty2.default)(object.data)) ret.data = object.data;
     return ret;
   },
 
@@ -16436,8 +16452,8 @@ var Raw = {
     var ret = {};
     ret.kind = object.kind;
     ret.type = object.type;
-    if (object.nodes) ret.nodes = object.nodes;
     if (object.key) ret.key = object.key;
+    if (!object.isVoid) ret.nodes = object.nodes;
     if (object.isVoid) ret.isVoid = object.isVoid;
     if (!(0, _isEmpty2.default)(object.data)) ret.data = object.data;
     return ret;
@@ -16630,6 +16646,7 @@ var Raw = {
     return {
       kind: 'state',
       document: {
+        data: object.data,
         key: object.key,
         kind: 'document',
         nodes: object.nodes
@@ -17107,7 +17124,7 @@ function setNode(state, operation) {
   }
 
   node = node.merge(properties);
-  document = document.updateDescendant(node);
+  document = node.kind === 'document' ? node : document.updateDescendant(node);
   state = state.merge({ document: document });
   return state;
 }
@@ -19373,8 +19390,8 @@ function setNodeByKey(transform, key, properties) {
   transform.setNodeOperation(path, properties);
 
   if (normalize) {
-    var parent = document.getParent(key);
-    transform.normalizeNodeByKey(parent.key, _core2.default);
+    var node = key === document.key ? document : document.getParent(key);
+    transform.normalizeNodeByKey(node.key, _core2.default);
   }
 }
 
