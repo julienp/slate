@@ -3496,7 +3496,7 @@ var LargeDocument = function (_React$Component) {
       return _react2.default.createElement(_.Editor, {
         placeholder: 'Enter some plain text...',
         schema: schema,
-        spellcheck: false,
+        spellCheck: false,
         state: _this.state.state,
         onChange: _this.onChange
       });
@@ -5748,6 +5748,7 @@ var Content = function (_React$Component) {
  */
 
 Content.propTypes = {
+  autoCorrect: _react2.default.PropTypes.bool.isRequired,
   className: _react2.default.PropTypes.string,
   editor: _react2.default.PropTypes.object.isRequired,
   onBeforeInput: _react2.default.PropTypes.func.isRequired,
@@ -5783,7 +5784,7 @@ var _initialiseProps = function _initialiseProps() {
     // will end up duplicating content.
     if (props.state.isNative) return false;
 
-    return props.className != _this2.props.className || props.schema != _this2.props.schema || props.spellCheck != _this2.props.spellCheck || props.state != _this2.props.state || props.style != _this2.props.style;
+    return props.className != _this2.props.className || props.schema != _this2.props.schema || props.autoCorrect != _this2.props.autoCorrect || props.spellCheck != _this2.props.spellCheck || props.state != _this2.props.state || props.style != _this2.props.style;
   };
 
   this.componentDidUpdate = function (prevProps, prevState) {
@@ -5811,7 +5812,8 @@ var _initialiseProps = function _initialiseProps() {
   this.onBeforeInput = function (event) {
     if (_this2.props.readOnly) return;
     if (!_this2.isInContentEditable(event)) return;
-    if (event.type === 'textInput' && event.data && event.data.length > 1 && _environment.IS_IOS) return;
+    // Skip events from predictive input on iOS
+    if (_environment.IS_IOS && event.type === 'textInput' && event.data && event.data.length > 1) return;
 
     var data = {};
 
@@ -6281,6 +6283,7 @@ var _initialiseProps = function _initialiseProps() {
       onKeyUp: _this2.onKeyUp,
       onPaste: _this2.onPaste,
       onSelect: _this2.onSelect,
+      autoCorrect: props.autoCorrect,
       spellCheck: spellCheck,
       style: style,
       role: readOnly ? null : role || 'textbox',
@@ -6402,7 +6405,7 @@ var EVENT_HANDLERS = ['onBeforeInput', 'onBlur', 'onCopy', 'onCut', 'onDrop', 'o
  * @type {Array}
  */
 
-var PLUGINS_PROPS = [].concat(EVENT_HANDLERS, ['plugins', 'schema']);
+var PLUGINS_PROPS = [].concat(EVENT_HANDLERS, ['placeholder', 'placeholderClassName', 'placeholderStyle', 'plugins', 'schema']);
 
 /**
  * Editor.
@@ -6552,6 +6555,7 @@ var Editor = function (_React$Component) {
  */
 
 Editor.propTypes = {
+  autoCorrect: _react2.default.PropTypes.bool,
   className: _react2.default.PropTypes.string,
   onBeforeChange: _react2.default.PropTypes.func,
   onChange: _react2.default.PropTypes.func,
@@ -6570,6 +6574,7 @@ Editor.propTypes = {
   tabIndex: _react2.default.PropTypes.number
 };
 Editor.defaultProps = {
+  autoCorrect: true,
   onChange: _noop2.default,
   onDocumentChange: _noop2.default,
   onSelectionChange: _noop2.default,
@@ -6708,6 +6713,7 @@ var _initialiseProps = function _initialiseProps() {
       state: _this2.getState(),
       className: props.className,
       readOnly: props.readOnly,
+      autoCorrect: props.autoCorrect,
       spellCheck: props.spellCheck,
       style: props.style,
       tabIndex: props.tabIndex,
@@ -7099,7 +7105,12 @@ var Leaf = function (_React$Component) {
       // COMPAT: If the text is empty otherwise, it's because it's on the edge of
       // an inline void node, so we render a zero-width space so that the
       // selection can be inserted next to it still.
-      if (text == '') return _react2.default.createElement('span', { 'data-slate-zero-width': true }, "\u200B");
+      if (text == '') {
+        // COMPAT: In Chrome, zero-width space produces graphics glitches, so use
+        // hair space in place of it. (2017/02/12)
+        var space = _environment.IS_FIREFOX ? "\u200B" : "\u200A";
+        return _react2.default.createElement('span', { 'data-slate-zero-width': true }, space);
+      }
 
       // COMPAT: Browsers will collapse trailing new lines at the end of blocks,
       // so we need to add an extra trailing new lines to prevent that.
@@ -7936,7 +7947,6 @@ var _initialiseProps = function _initialiseProps() {
   };
 
   this.onClick = function (event) {
-    event.preventDefault();
     _this2.debug('onClick', { event: event });
 
     var _props = _this2.props,
@@ -7958,12 +7968,16 @@ var _initialiseProps = function _initialiseProps() {
     var children = props.children,
         node = props.node;
 
-    var Tag = node.kind == 'block' ? 'div' : 'span';
+    var Tag = void 0,
+        style = void 0;
 
     // Make the outer wrapper relative, so the spacer can overlay it.
-    var style = {
-      position: 'relative'
-    };
+    if (node.kind === 'block') {
+      Tag = 'div';
+      style = { position: 'relative' };
+    } else {
+      Tag = 'span';
+    }
 
     _this2.debug('render', { props: props });
 
@@ -7990,10 +8004,7 @@ var _initialiseProps = function _initialiseProps() {
       };
     } else {
       style = {
-        position: 'relative',
-        top: '0px',
-        left: '-9999px',
-        textIndent: '-9999px'
+        color: 'transparent'
       };
     }
 
@@ -9650,7 +9661,9 @@ var Node = {
 
     return this.getTexts().map(function (text) {
       return _this.getClosestBlock(text.key);
-    }).toOrderedSet().toList();
+    })
+    // Eliminate duplicates
+    .toOrderedSet().toList();
   },
 
   /**
@@ -9665,7 +9678,9 @@ var Node = {
 
     return this.getTextsAtRange(range).map(function (text) {
       return _this2.getClosestBlock(text.key);
-    });
+    })
+    // Eliminate duplicates
+    .toOrderedSet().toList();
   },
 
   /**
@@ -10078,15 +10093,22 @@ var Node = {
    */
 
   getHighestOnlyChildParent: function getHighestOnlyChildParent(key) {
-    var child = this.assertDescendant(key);
-    var match = null;
-    var parent = void 0;
+    var ancestors = this.getAncestors(key);
 
-    while (parent = this.getParent(child)) {
-      if (parent == null || parent.nodes.size > 1) return match;
-      match = parent;
-      child = parent;
+    if (!ancestors) {
+      key = _normalize2.default.key(key);
+      throw new Error('Could not find a descendant node with key "' + key + '".');
     }
+
+    return ancestors
+    // Skip this node
+    .skipLast()
+    // Take parents until there are more than one child
+    .reverse().takeUntil(function (p) {
+      return p.nodes.size > 1;
+    })
+    // Pick the highest
+    .last();
   },
 
   /**
@@ -14270,7 +14292,7 @@ function Plugin() {
   function onCutOrCopy(e, data, state) {
     var window = (0, _getWindow2.default)(e.target);
     var native = window.getSelection();
-    if (!native.rangeCount) return;
+    if (native.isCollapsed) return;
 
     var fragment = data.fragment;
 
@@ -15368,6 +15390,16 @@ Object.defineProperty(exports, "__esModule", {
   value: true
 });
 
+var _extends = Object.assign || function (target) {
+  for (var i = 1; i < arguments.length; i++) {
+    var source = arguments[i];for (var key in source) {
+      if (Object.prototype.hasOwnProperty.call(source, key)) {
+        target[key] = source[key];
+      }
+    }
+  }return target;
+};
+
 var _raw = require('./raw');
 
 var _raw2 = _interopRequireDefault(_raw);
@@ -15469,6 +15501,7 @@ var Html =
  * @param {Object} options
  *   @property {Array} rules
  *   @property {String} defaultBlockType
+ *   @property {String|Object} defaultBlockType
  */
 
 function Html() {
@@ -15487,6 +15520,8 @@ function Html() {
  * Deserialize pasted HTML.
  *
  * @param {String} html
+ * @param {Object} options
+ *   @property {Boolean} toRaw
  * @return {State}
  */
 
@@ -15554,6 +15589,8 @@ var _initialiseProps = function _initialiseProps() {
   var _this = this;
 
   this.deserialize = function (html) {
+    var options = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {};
+
     var $ = _cheerio2.default.load(html).root();
     var children = $.children().toArray();
     var nodes = _this.deserializeElements(children);
@@ -15571,17 +15608,32 @@ var _initialiseProps = function _initialiseProps() {
         return memo;
       }
 
-      var block = {
+      var defaultBlockType = _this.defaultBlockType;
+
+      var defaults = typeof defaultBlockType == 'string' ? { type: defaultBlockType } : defaultBlockType;
+
+      var block = _extends({
         kind: 'block',
-        type: _this.defaultBlockType,
         nodes: [node]
-      };
+      }, defaults);
 
       memo.push(block);
       return memo;
     }, []);
 
-    var state = _raw2.default.deserialize({ nodes: nodes }, { terse: true });
+    var raw = {
+      kind: 'state',
+      document: {
+        kind: 'document',
+        nodes: nodes
+      }
+    };
+
+    if (options.toRaw) {
+      return raw;
+    }
+
+    var state = _raw2.default.deserialize(raw, { terse: true });
     return state;
   };
 
@@ -15825,21 +15877,9 @@ Object.defineProperty(exports, "__esModule", {
   value: true
 });
 
-var _block = require('../models/block');
+var _raw = require('../serializers/raw');
 
-var _block2 = _interopRequireDefault(_block);
-
-var _document = require('../models/document');
-
-var _document2 = _interopRequireDefault(_document);
-
-var _state = require('../models/state');
-
-var _state2 = _interopRequireDefault(_state);
-
-var _text = require('../models/text');
-
-var _text2 = _interopRequireDefault(_text);
+var _raw2 = _interopRequireDefault(_raw);
 
 function _interopRequireDefault(obj) {
   return obj && obj.__esModule ? obj : { default: obj };
@@ -15849,42 +15889,35 @@ function _interopRequireDefault(obj) {
  * Deserialize a plain text `string` to a state.
  *
  * @param {String} string
+ * @param {Object} options
+ *   @property {Boolean} toRaw
  * @return {State}
  */
 
 function deserialize(string) {
-  return _state2.default.create({
-    document: _document2.default.create({
-      nodes: string.split('\n').map(deserializeLine)
-    })
-  });
-}
+  var options = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {};
 
-/**
- * Deserialize a `line` of text.
- *
- * @param {String} line
- * @return {Block}
- */
+  var raw = {
+    kind: 'state',
+    document: {
+      kind: 'document',
+      nodes: string.split('\n').map(function (line) {
+        return {
+          kind: 'block',
+          type: 'line',
+          nodes: [{
+            kind: 'text',
+            ranges: [{
+              text: line,
+              marks: []
+            }]
+          }]
+        };
+      })
+    }
+  };
 
-function deserializeLine(line) {
-  return _block2.default.create({
-    type: 'line',
-    nodes: [_text2.default.create({
-      characters: line.split('').map(deserializeCharacter)
-    })]
-  });
-}
-
-/**
- * Deserialize a `character`.
- *
- * @param {String} char
- * @return {Character}
- */
-
-function deserializeCharacter(char) {
-  return { text: char };
+  return options.toRaw ? raw : _raw2.default.deserialize(raw);
 }
 
 /**
@@ -15911,7 +15944,7 @@ exports.default = {
   serialize: serialize
 };
 
-},{"../models/block":47,"../models/document":50,"../models/state":58,"../models/text":59}],66:[function(require,module,exports){
+},{"../serializers/raw":66}],66:[function(require,module,exports){
 'use strict';
 
 Object.defineProperty(exports, "__esModule", {
@@ -16635,7 +16668,7 @@ var Raw = {
    */
 
   untersifyState: function untersifyState(object) {
-    if (object.selection != null) {
+    if (object.selection || object.document) {
       return {
         kind: 'state',
         document: object.document,
@@ -17939,9 +17972,8 @@ function deleteAtRange(transform, range) {
       transform.moveNodeByKey(child.key, newKey, newIndex, OPTS);
     });
 
-    var lonely = document.getFurthest(endBlock.key, function (p) {
-      return p.nodes.size == 1;
-    }) || endBlock;
+    // Remove parents of endBlock as long as they have a single child
+    var lonely = document.getHighestOnlyChildParent(endBlock.key) || endBlock;
     transform.removeNodeByKey(lonely.key, OPTS);
   }
 
@@ -17961,11 +17993,16 @@ function deleteAtRange(transform, range) {
 
 function deleteCharBackwardAtRange(transform, range, options) {
   var state = transform.state;
-  var startOffset = state.startOffset,
-      startBlock = state.startBlock;
+  var document = state.document;
+  var startKey = range.startKey,
+      startOffset = range.startOffset;
+
+  var startBlock = document.getClosestBlock(startKey);
+  var offset = startBlock.getOffset(startKey);
+  var o = offset + startOffset;
   var text = startBlock.text;
 
-  var n = _string2.default.getCharOffsetBackward(text, startOffset);
+  var n = _string2.default.getCharOffsetBackward(text, o);
   transform.deleteBackwardAtRange(range, n, options);
 }
 
@@ -17980,9 +18017,14 @@ function deleteCharBackwardAtRange(transform, range, options) {
 
 function deleteLineBackwardAtRange(transform, range, options) {
   var state = transform.state;
-  var startOffset = state.startOffset;
+  var document = state.document;
+  var startKey = range.startKey,
+      startOffset = range.startOffset;
 
-  transform.deleteBackwardAtRange(range, startOffset, options);
+  var startBlock = document.getClosestBlock(startKey);
+  var offset = startBlock.getOffset(startKey);
+  var o = offset + startOffset;
+  transform.deleteBackwardAtRange(range, o, options);
 }
 
 /**
@@ -17996,11 +18038,16 @@ function deleteLineBackwardAtRange(transform, range, options) {
 
 function deleteWordBackwardAtRange(transform, range, options) {
   var state = transform.state;
-  var startOffset = state.startOffset,
-      startBlock = state.startBlock;
+  var document = state.document;
+  var startKey = range.startKey,
+      startOffset = range.startOffset;
+
+  var startBlock = document.getClosestBlock(startKey);
+  var offset = startBlock.getOffset(startKey);
+  var o = offset + startOffset;
   var text = startBlock.text;
 
-  var n = _string2.default.getWordOffsetBackward(text, startOffset);
+  var n = _string2.default.getWordOffsetBackward(text, o);
   transform.deleteBackwardAtRange(range, n, options);
 }
 
@@ -18071,21 +18118,59 @@ function deleteBackwardAtRange(transform, range) {
       return;
     }
 
-    // If the previous text's block is inside the current block, then we need
-    // to remove a character when deleteing. Otherwise, we just want to join
-    // the two blocks together.
+    // If we're deleting by one character and the previous text node is not
+    // inside the current block, we need to join the two blocks together.
+    if (n == 1 && prevBlock != block) {
+      range = range.merge({
+        anchorKey: prev.key,
+        anchorOffset: prev.length
+      });
+
+      transform.deleteAtRange(range, { normalize: normalize });
+      return;
+    }
+  }
+
+  // If the focus offset is farther than the number of characters to delete,
+  // just remove the characters backwards inside the current node.
+  if (n < focusOffset) {
     range = range.merge({
-      anchorKey: prev.key,
-      anchorOffset: prevBlock == block ? prev.length - 1 : prev.length
+      focusOffset: focusOffset - n,
+      isBackward: true
     });
 
     transform.deleteAtRange(range, { normalize: normalize });
     return;
   }
 
-  // Otherwise, just remove a character backwards.
+  // Otherwise, we need to see how many nodes backwards to go.
+  var node = text;
+  var offset = 0;
+  var traversed = focusOffset;
+
+  while (n > traversed) {
+    node = document.getPreviousText(node.key);
+    var next = traversed + node.length;
+    if (n <= next) {
+      offset = next - n;
+      break;
+    } else {
+      traversed = next;
+    }
+  }
+
+  // If the focus node is inside a void, go up until right after it.
+  if (document.hasVoidParent(node.key)) {
+    var parent = document.getClosest(node.key, function (p) {
+      return p.isVoid;
+    });
+    node = document.getNextText(parent.key);
+    offset = 0;
+  }
+
   range = range.merge({
-    focusOffset: focusOffset - n,
+    focusKey: node.key,
+    focusOffset: offset,
     isBackward: true
   });
 
@@ -18103,11 +18188,16 @@ function deleteBackwardAtRange(transform, range) {
 
 function deleteCharForwardAtRange(transform, range, options) {
   var state = transform.state;
-  var startOffset = state.startOffset,
-      startBlock = state.startBlock;
+  var document = state.document;
+  var startKey = range.startKey,
+      startOffset = range.startOffset;
+
+  var startBlock = document.getClosestBlock(startKey);
+  var offset = startBlock.getOffset(startKey);
+  var o = offset + startOffset;
   var text = startBlock.text;
 
-  var n = _string2.default.getCharOffsetForward(text, startOffset);
+  var n = _string2.default.getCharOffsetForward(text, o);
   transform.deleteForwardAtRange(range, n, options);
 }
 
@@ -18122,10 +18212,14 @@ function deleteCharForwardAtRange(transform, range, options) {
 
 function deleteLineForwardAtRange(transform, range, options) {
   var state = transform.state;
-  var startOffset = state.startOffset,
-      startBlock = state.startBlock;
+  var document = state.document;
+  var startKey = range.startKey,
+      startOffset = range.startOffset;
 
-  transform.deleteForwardAtRange(range, startBlock.length - startOffset, options);
+  var startBlock = document.getClosestBlock(startKey);
+  var offset = startBlock.getOffset(startKey);
+  var o = offset + startOffset;
+  transform.deleteForwardAtRange(range, o, options);
 }
 
 /**
@@ -18139,11 +18233,16 @@ function deleteLineForwardAtRange(transform, range, options) {
 
 function deleteWordForwardAtRange(transform, range, options) {
   var state = transform.state;
-  var startOffset = state.startOffset,
-      startBlock = state.startBlock;
+  var document = state.document;
+  var startKey = range.startKey,
+      startOffset = range.startOffset;
+
+  var startBlock = document.getClosestBlock(startKey);
+  var offset = startBlock.getOffset(startKey);
+  var o = offset + startOffset;
   var text = startBlock.text;
 
-  var n = _string2.default.getWordOffsetForward(text, startOffset);
+  var n = _string2.default.getWordOffsetForward(text, o);
   transform.deleteForwardAtRange(range, n, options);
 }
 
@@ -18168,57 +18267,105 @@ function deleteForwardAtRange(transform, range) {
       startKey = _range2.startKey,
       focusOffset = _range2.focusOffset;
 
+  // If the range is expanded, perform a regular delete instead.
+
   if (range.isExpanded) {
     transform.deleteAtRange(range, { normalize: normalize });
     return;
   }
 
+  // If the closest block is void, delete it.
   var block = document.getClosestBlock(startKey);
   if (block && block.isVoid) {
     transform.removeNodeByKey(block.key, { normalize: normalize });
     return;
   }
 
+  // If the closest inline is void, delete it.
   var inline = document.getClosestInline(startKey);
   if (inline && inline.isVoid) {
     transform.removeNodeByKey(inline.key, { normalize: normalize });
     return;
   }
 
+  // If the range is at the start of the document, abort.
   if (range.isAtEndOf(document)) {
     return;
   }
 
+  // If the range is at the start of the text node, we need to figure out what
+  // is behind it to know how to delete...
   var text = document.getDescendant(startKey);
   if (range.isAtEndOf(text)) {
     var next = document.getNextText(text.key);
     var nextBlock = document.getClosestBlock(next.key);
     var nextInline = document.getClosestInline(next.key);
 
+    // If the previous block is void, remove it.
     if (nextBlock && nextBlock.isVoid) {
       transform.removeNodeByKey(nextBlock.key, { normalize: normalize });
       return;
     }
 
+    // If the previous inline is void, remove it.
     if (nextInline && nextInline.isVoid) {
       transform.removeNodeByKey(nextInline.key, { normalize: normalize });
       return;
     }
 
-    // If the next text's block is inside the current block, then we need
-    // to remove a character when deleteing. Otherwise, we just want to join
-    // the two blocks together.
+    // If we're deleting by one character and the previous text node is not
+    // inside the current block, we need to join the two blocks together.
+    if (n == 1 && nextBlock != block) {
+      range = range.merge({
+        focusKey: next.key,
+        focusOffset: 0
+      });
+
+      transform.deleteAtRange(range, { normalize: normalize });
+      return;
+    }
+  }
+
+  // If the remaining characters to the end of the node is greater than or equal
+  // to the number of characters to delete, just remove the characters forwards
+  // inside the current node.
+  if (n <= text.length - focusOffset) {
     range = range.merge({
-      focusKey: next.key,
-      focusOffset: nextBlock == block ? 1 : 0
+      focusOffset: focusOffset + n
     });
 
     transform.deleteAtRange(range, { normalize: normalize });
     return;
   }
 
+  // Otherwise, we need to see how many nodes forwards to go.
+  var node = text;
+  var offset = focusOffset;
+  var traversed = text.length - focusOffset;
+
+  while (n > traversed) {
+    node = document.getNextText(node.key);
+    var _next = traversed + node.length;
+    if (n <= _next) {
+      offset = n - traversed;
+      break;
+    } else {
+      traversed = _next;
+    }
+  }
+
+  // If the focus node is inside a void, go up until right before it.
+  if (document.hasVoidParent(node.key)) {
+    var parent = document.getClosest(node.key, function (p) {
+      return p.isVoid;
+    });
+    node = document.getPreviousText(parent.key);
+    offset = node.length;
+  }
+
   range = range.merge({
-    focusOffset: focusOffset + n
+    focusKey: node.key,
+    focusOffset: offset
   });
 
   transform.deleteAtRange(range, { normalize: normalize });
@@ -20263,7 +20410,7 @@ function collapseToEndOfNextBlock(transform) {
 
   var blocks = document.getBlocksAtRange(selection);
   var last = blocks.last();
-  var next = document.getNextBlock(last);
+  var next = document.getNextBlock(last.key);
   if (!next) return;
 
   var sel = selection.collapseToEndOf(next);
@@ -20283,7 +20430,7 @@ function collapseToEndOfNextText(transform) {
 
   var texts = document.getTextsAtRange(selection);
   var last = texts.last();
-  var next = document.getNextText(last);
+  var next = document.getNextText(last.key);
   if (!next) return;
 
   var sel = selection.collapseToEndOf(next);
@@ -20303,7 +20450,7 @@ function collapseToEndOfPreviousBlock(transform) {
 
   var blocks = document.getBlocksAtRange(selection);
   var first = blocks.first();
-  var previous = document.getPreviousBlock(first);
+  var previous = document.getPreviousBlock(first.key);
   if (!previous) return;
 
   var sel = selection.collapseToEndOf(previous);
@@ -20323,7 +20470,7 @@ function collapseToEndOfPreviousText(transform) {
 
   var texts = document.getTextsAtRange(selection);
   var first = texts.first();
-  var previous = document.getPreviousText(first);
+  var previous = document.getPreviousText(first.key);
   if (!previous) return;
 
   var sel = selection.collapseToEndOf(previous);
@@ -20343,7 +20490,7 @@ function collapseToStartOfNextBlock(transform) {
 
   var blocks = document.getBlocksAtRange(selection);
   var last = blocks.last();
-  var next = document.getNextBlock(last);
+  var next = document.getNextBlock(last.key);
   if (!next) return;
 
   var sel = selection.collapseToStartOf(next);
@@ -20363,7 +20510,7 @@ function collapseToStartOfNextText(transform) {
 
   var texts = document.getTextsAtRange(selection);
   var last = texts.last();
-  var next = document.getNextText(last);
+  var next = document.getNextText(last.key);
   if (!next) return;
 
   var sel = selection.collapseToStartOf(next);
@@ -20383,7 +20530,7 @@ function collapseToStartOfPreviousBlock(transform) {
 
   var blocks = document.getBlocksAtRange(selection);
   var first = blocks.first();
-  var previous = document.getPreviousBlock(first);
+  var previous = document.getPreviousBlock(first.key);
   if (!previous) return;
 
   var sel = selection.collapseToStartOf(previous);
@@ -20403,7 +20550,7 @@ function collapseToStartOfPreviousText(transform) {
 
   var texts = document.getTextsAtRange(selection);
   var first = texts.first();
-  var previous = document.getPreviousText(first);
+  var previous = document.getPreviousText(first.key);
   if (!previous) return;
 
   var sel = selection.collapseToStartOf(previous);
@@ -22348,6 +22495,7 @@ function isWord(char, remaining) {
   if (CHAMELEON.test(char)) {
     var next = remaining.charAt(0);
     var length = getCharLength(next);
+    next = remaining.slice(0, length);
     var rest = remaining.slice(length);
     if (isWord(next, rest)) return true;
   }
@@ -22421,13 +22569,14 @@ function getWordOffset(text) {
 
   while (char = text.charAt(i)) {
     var l = getCharLength(char);
+    char = text.slice(i, i + l);
     var rest = text.slice(i + l);
 
     if (isWord(char, rest)) {
       started = true;
-      length++;
+      length += l;
     } else if (!started) {
-      length++;
+      length += l;
     } else {
       break;
     }
@@ -22449,7 +22598,8 @@ function getWordOffset(text) {
 function getWordOffsetBackward(text, offset) {
   text = text.slice(0, offset);
   text = (0, _esrever.reverse)(text);
-  return getWordOffset(text);
+  var o = getWordOffset(text);
+  return o;
 }
 
 /**
@@ -22462,7 +22612,8 @@ function getWordOffsetBackward(text, offset) {
 
 function getWordOffsetForward(text, offset) {
   text = text.slice(offset);
-  return getWordOffset(text);
+  var o = getWordOffset(text);
+  return o;
 }
 
 /**
