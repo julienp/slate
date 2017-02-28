@@ -97,7 +97,7 @@ class Links extends React.Component {
       state = state
         .transform()
         .insertText(text)
-        .extendBackward(text.length)
+        .extend(0 - text.length)
         .wrapInline({
           type: 'link',
           data: { href }
@@ -122,7 +122,7 @@ class Links extends React.Component {
     if (data.type != 'text' && data.type != 'html') return
     if (!isUrl(data.text)) return
 
-    let transform = state.transform()
+    const transform = state.transform()
 
     if (this.hasLinks()) {
       transform.unwrapInline('link')

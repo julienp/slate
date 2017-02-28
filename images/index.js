@@ -1,9 +1,23 @@
 
-import { Editor, Raw } from '../..'
+import { Editor, Block, Raw } from '../..'
 import React from 'react'
 import initialState from './state.json'
 import isImage from 'is-image'
 import isUrl from 'is-url'
+
+
+/**
+ * Default block to be inserted when the document is empty,
+ * and after an image is the last node in the document.
+ *
+ * @type {Object}
+ */
+
+const defaultBlock = {
+  type: 'paragraph',
+  isVoid: false,
+  data: {}
+}
 
 /**
  * Define a schema.
@@ -21,8 +35,43 @@ const schema = {
       return (
         <img src={src} className={className} {...props.attributes} />
       )
+    },
+    paragraph: (props) => {
+      return <p {...props.attributes}>{props.children}</p>
     }
-  }
+  },
+  rules: [
+    // Rule to insert a paragraph block if the document is empty
+    {
+      match: (node) => {
+        return node.kind == 'document'
+      },
+      validate: (document) => {
+        return document.nodes.size ? null : true
+      },
+      normalize: (transform, document) => {
+        const block = Block.create(defaultBlock)
+        transform
+          .insertNodeByKey(document.key, 0, block)
+      }
+    },
+    // Rule to insert a paragraph below a void node (the image)
+    // if that node is the last one in the document
+    {
+      match: (node) => {
+        return node.kind == 'document'
+      },
+      validate: (document) => {
+        const lastNode = document.nodes.last()
+        return lastNode && lastNode.isVoid ? true : null
+      },
+      normalize: (transform, document) => {
+        const block = Block.create(defaultBlock)
+        transform
+          .insertNodeByKey(document.key, document.nodes.size, block)
+      }
+    }
+  ]
 }
 
 /**
@@ -106,34 +155,6 @@ class Images extends React.Component {
   }
 
   /**
-   * On document change, if the last block is an image, add another paragraph.
-   *
-   * @param {Document} document
-   * @param {State} state
-   */
-
-  onDocumentChange = (document, state) => {
-    const blocks = document.getBlocks()
-    const last = blocks.last()
-    if (last.type != 'image') return
-
-    const normalized = state
-      .transform()
-      .collapseToEndOf(last)
-      .splitBlock()
-      .setBlock({
-        type: 'paragraph',
-        isVoid: false,
-        data: {}
-      })
-      .apply({
-        save: false
-      })
-
-    this.onChange(normalized)
-  }
-
-  /**
    * On clicking the image button, prompt for an image and insert it.
    *
    * @param {Event} e
@@ -177,9 +198,9 @@ class Images extends React.Component {
   onDropNode = (e, data, state) => {
     return state
       .transform()
-      .unsetSelection()
+      .deselect()
       .removeNodeByKey(data.node.key)
-      .moveTo(data.target)
+      .select(data.target)
       .insertBlock(data.node)
       .apply()
   }
